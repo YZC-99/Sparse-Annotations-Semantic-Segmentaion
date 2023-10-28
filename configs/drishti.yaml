@@ -3,7 +3,7 @@ dataset: Drishti-GS
 nclass: 3
 crop_size: 512
 aug: False
-data_root: Drishti-GS
+data_root: /data/Drishti-GS
 mode: 'point'
 
 # arguments for training
