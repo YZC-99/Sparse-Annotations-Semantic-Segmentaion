@@ -1,4 +1,5 @@
 /experiments*
+/exp*
 /pretrained
 /data
 /ckpt
