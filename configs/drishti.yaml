@@ -1,15 +1,15 @@
 # arguments for dataset
-dataset: cityscapes
-nclass: 19
-crop_size: 721
+dataset: Drishti-GS
+nclass: 3
+crop_size: 512
 aug: False
-data_root: Cityscapes
+data_root: Drishti-GS
 mode: 'point'
 
 # arguments for training
 epochs: 240
 batch_size: 4
-lr: 0.005  # 8GPUs
+lr: 0.000625  # 1GPUs
 lr_multi: 1.0
 criterion:
   name: CELoss

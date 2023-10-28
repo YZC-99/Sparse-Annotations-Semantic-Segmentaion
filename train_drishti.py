@@ -20,7 +20,7 @@ from util.ohem import ProbOhemCrossEntropy2d
 from util.utils import count_params, AverageMeter, intersectionAndUnion, init_log, evaluate
 from util.dist_helper import setup_distributed
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "0, 1, 2"
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '28890'
 # sh tools/train_city.sh 3 28890
@@ -70,9 +70,9 @@ def main():
     ohem = False if cfg['criterion']['name'] == 'CELoss' else True
     use_weight = False
 
-    trainset = CityDataset(cfg['dataset'], cfg['data_root'], cfg['mode'],
+    trainset = DrishtiDataset(cfg['dataset'], cfg['data_root'], cfg['mode'],
                            cfg['crop_size'], cfg['aug'])
-    valset = CityDataset(cfg['dataset'], cfg['data_root'], 'val', None)
+    valset = DrishtiDataset(cfg['dataset'], cfg['data_root'], 'val', None)
 
     trainsampler = torch.utils.data.distributed.DistributedSampler(trainset)
     trainloader = DataLoader(trainset, batch_size=cfg['batch_size'],
