@@ -40,21 +40,17 @@ def main():
     logger = init_log('global', logging.INFO)
     logger.propagate = 0
 
-    rank, word_size = setup_distributed(port=args.port)
 
-    if rank == 0:
-        logger.info('{}\n'.format(pprint.pformat(cfg)))
+    logger.info('{}\n'.format(pprint.pformat(cfg)))
 
-    if rank == 0:
-        os.makedirs(args.save_path, exist_ok=True)
+    os.makedirs(args.save_path, exist_ok=True)
 
     cudnn.enabled = True
     cudnn.benchmark = True
 
     model = DeepLabV3Plus(cfg, aux=cfg['aux'])
 
-    if rank == 0:
-        logger.info('Total params: {:.1f}M\n'.format(count_params(model)))
+    logger.info('Total params: {:.1f}M\n'.format(count_params(model)))
 
     optimizer = SGD([{'params': model.backbone.parameters(), 'lr': cfg['lr']},
                      {'params': [param for name, param in model.named_parameters() if 'backbone' not in name],
@@ -86,9 +82,8 @@ def main():
     previous_best = 0.0
 
     for epoch in range(cfg['epochs']):
-        if rank == 0:
-            logger.info('===========> Epoch: {:}, LR: {:.4f}, Previous best: {:.2f}'.format(
-                epoch, optimizer.param_groups[0]['lr'], previous_best))
+        logger.info('===========> Epoch: {:}, LR: {:.4f}, Previous best: {:.2f}'.format(
+            epoch, optimizer.param_groups[0]['lr'], previous_best))
 
         model.train()
         loss_m = AverageMeter()
@@ -130,7 +125,7 @@ def main():
             optimizer.param_groups[0]["lr"] = lr
             optimizer.param_groups[1]["lr"] = lr * cfg['lr_multi']
 
-            if (i % (max(2, len(trainloader) // 8)) == 0) and (rank == 0):
+            if (i % (max(2, len(trainloader) // 8)) == 0):
                 logger.info('Iters:{:}, loss:{:.3f}, seg_loss:{:.3f}, '
                             'gmm_loss:{:.3f}'.format
                             (i, loss_m.avg, seg_m.avg, gmm_m.avg))
@@ -141,10 +136,9 @@ def main():
             eval_mode = 'original'
         mIOU, iou_class = evaluate(model, valloader, eval_mode, cfg)
 
-        if rank == 0:
-            logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
+        logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
 
-        if mIOU > previous_best and rank == 0:
+        if mIOU > previous_best:
             if previous_best != 0:
                 os.remove(os.path.join(args.save_path, '%s_%.2f.pth' % (cfg['backbone'], previous_best)))
             previous_best = mIOU
