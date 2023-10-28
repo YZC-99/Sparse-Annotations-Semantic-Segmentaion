@@ -31,13 +31,14 @@ class DrishtiDataset(Dataset):
         self.mode = mode
         self.size = size
         self.aug = aug
-        self.ignore_class = 21  # voc
+        self.ignore_class = 4  # voc
 
         self.img_path = root
         self.true_mask_path = root
 
         if mode == 'val':
             self.label_path = self.true_mask_path
+            self.label_type = 'my_gts_cropped'
             id_path = 'dataset/splits/%s/val.txt' % name
             with open(id_path, 'r') as f:
                 self.ids = f.read().splitlines()
@@ -50,7 +51,7 @@ class DrishtiDataset(Dataset):
             if mode == 'full':
                 self.label_type = 'my_gts_cropped'
             elif mode == 'point':
-                self.label_type = root + 'my_gts_cropped_100points'
+                self.label_type = 'my_gts_cropped_100points'
             elif mode == 'scribble':
                 self.label_type = root + '/scribble/seginst'
 
@@ -72,11 +73,13 @@ class DrishtiDataset(Dataset):
         return cls_label
 
     def __getitem__(self, item):
+        
         id = self.ids[item]
         img = Image.open(os.path.join(self.root, id.split(' ')[0]))
         mask = Image.open(os.path.join(self.root, id.split(' ')[1].replace('my_gts_cropped',self.label_type)))
 
         if self.mode == 'val':
+            img, mask = val_resize([img, mask], 256,256)
             img, mask = normalize(img, mask)
             return img, mask, id
 

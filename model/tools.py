@@ -32,6 +32,7 @@ def get_cls_loss(predict, cls_label, mask):
 
     # if a patch does not contain label k,
     # then none of the pixels in this patch can be assigned to label k
+    
     loss = - (1 - cls_label.view(b, k, 1)) * torch.log(1 - predict + 1e-6)
     loss = torch.sum(loss, dim=1)
     loss = loss[mask != 255].mean()

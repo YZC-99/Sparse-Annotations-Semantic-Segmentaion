@@ -1,9 +1,9 @@
 # arguments for dataset
 dataset: Drishti-GS
-nclass: 3
+nclass: 4
 crop_size: 256
 aug: False
-data_root: /data/Drishti-GS
+data_root: /root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion/data/Drishti-GS
 mode: 'point'
 
 # arguments for training

@@ -28,6 +28,18 @@ def resize(inputs, ratio_range):
         outputs.append(input)
     return outputs
 
+def val_resize(inputs,ow, oh):
+    img = inputs[0]
+    outputs = []
+    w, h = img.size
+    for i, input in enumerate(inputs):
+        if i == 0:
+            input = input.resize((ow, oh), Image.BILINEAR)
+        else:
+            input = input.resize((ow, oh), Image.NEAREST)
+        outputs.append(input)
+    return outputs
+
 
 def crop(inputs, size):
     # padding height or width if smaller than cropping size

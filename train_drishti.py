@@ -11,6 +11,9 @@ import torch.distributed as dist
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from torch.optim import SGD
+
+
+
 from torch.utils.data import DataLoader
 import yaml
 
@@ -21,6 +24,7 @@ from util.utils import count_params, AverageMeter, intersectionAndUnion, init_lo
 from util.dist_helper import setup_distributed
 
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+os.environ["LOCAL_RANK"] = '0'
 os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '28890'
 # sh tools/train_city.sh 3 28890
@@ -35,7 +39,7 @@ parser.add_argument('--port', default=None, type=int)
 def main():
     args = parser.parse_args()
 
-    cfg = yaml.load(open(args.config, "r"), Loader=yaml.Loader)
+    cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
 
     logger = init_log('global', logging.INFO)
     logger.propagate = 0
@@ -60,8 +64,6 @@ def main():
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     model.cuda(local_rank)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],
-                                                      output_device=local_rank, find_unused_parameters=False)
 
     ohem = False if cfg['criterion']['name'] == 'CELoss' else True
     use_weight = False
@@ -70,12 +72,12 @@ def main():
                            cfg['crop_size'], cfg['aug'])
     valset = DrishtiDataset(cfg['dataset'], cfg['data_root'], 'val', None)
 
-    trainsampler = torch.utils.data.distributed.DistributedSampler(trainset)
+#     trainsampler = torch.utils.data.distributed.DistributedSampler(trainset)
     trainloader = DataLoader(trainset, batch_size=cfg['batch_size'],
-                             pin_memory=True, num_workers=4, drop_last=True, sampler=trainsampler)
-    valsampler = torch.utils.data.distributed.DistributedSampler(valset)
+                             pin_memory=True, num_workers=4, drop_last=True)
+#     valsampler = torch.utils.data.distributed.DistributedSampler(valset)
     valloader = DataLoader(valset, batch_size=1, pin_memory=True, num_workers=2,
-                           drop_last=False, sampler=valsampler)
+                           drop_last=False)
 
     iters = 0
     total_iters = len(trainloader) * cfg['epochs']
@@ -90,7 +92,7 @@ def main():
         seg_m = AverageMeter()
         gmm_m = AverageMeter()
 
-        trainsampler.set_epoch(epoch)
+#         trainsampler.set_epoch(epoch)
 
         for i, (img, mask, cls_label, id) in enumerate(trainloader):
             img, mask, cls_label = img.cuda(), mask.cuda(), cls_label.cuda()
@@ -99,7 +101,7 @@ def main():
             seg_loss = loss_calc(pred, mask,
                                  ignore_index=cfg['nclass'], multi=False,
                                  class_weight=use_weight, ohem=ohem)
-
+            
             cls_loss = get_cls_loss(pred, cls_label, mask)
             pred_cl = clean_mask(pred, cls_label, True)
 
@@ -142,7 +144,7 @@ def main():
             if previous_best != 0:
                 os.remove(os.path.join(args.save_path, '%s_%.2f.pth' % (cfg['backbone'], previous_best)))
             previous_best = mIOU
-            torch.save(model.module.state_dict(),
+            torch.save(model.state_dict(),
                        os.path.join(args.save_path, '%s_%.2f.pth' % (cfg['backbone'], mIOU)))
 
 

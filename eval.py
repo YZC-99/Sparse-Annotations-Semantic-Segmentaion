@@ -31,8 +31,8 @@ def parse_args():
 
 
 def get_dataset(cfg):
-    if cfg['dataset'] == 'pascal':
-        valset = VocDataset(cfg['dataset'], cfg['data_root'], 'val', None)
+    if cfg['dataset'] == 'Drishti-GS':
+        valset = DrishtiDataset(cfg['dataset'], cfg['data_root'], 'val', None)
 
     elif cfg['dataset'] == 'cityscapes':
         valset = CityDataset(cfg['dataset'], cfg['data_root'], 'val', None)
