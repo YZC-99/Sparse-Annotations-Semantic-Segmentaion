@@ -7,5 +7,6 @@ git add .
 git commit -m "added"
 
 git fetch origin
-git reset --hard origin/main
+git checkout master
+git reset --hard origin/master
 
