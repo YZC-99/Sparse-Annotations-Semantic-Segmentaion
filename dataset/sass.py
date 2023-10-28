@@ -14,6 +14,95 @@ from torch.utils.data import DataLoader
 from model.tools import *
 
 
+class DrishtiDataset(Dataset):
+    def __init__(self, name, root, mode, size, aug=True):
+        """
+        :param name: dataset name, pascal or cityscapes
+        :param root: root path of the dataset.
+        :param mode: train: supervised learning only with labeled images, no unlabeled images are leveraged.
+                     label: pseudo labeling the remaining unlabeled images.
+                     semi_train: semi-supervised learning with both labeled and unlabeled images.
+                     val: validation.
+
+        :param size: crop size of training images.
+        """
+        self.name = name
+        self.root = root
+        self.mode = mode
+        self.size = size
+        self.aug = aug
+        self.ignore_class = 21  # voc
+
+        self.img_path = root
+        self.true_mask_path = root
+
+        if mode == 'val':
+            self.label_path = self.true_mask_path
+            id_path = 'dataset/splits/%s/val.txt' % name
+            with open(id_path, 'r') as f:
+                self.ids = f.read().splitlines()
+
+        else:
+            id_path = 'dataset/splits/%s/training.txt' % name
+            with open(id_path, 'r') as f:
+                self.ids = f.read().splitlines()
+
+            if mode == 'full':
+                self.label_type = 'my_gts_cropped'
+            elif mode == 'point':
+                self.label_type = root + 'my_gts_cropped_100points'
+            elif mode == 'scribble':
+                self.label_type = root + '/scribble/seginst'
+
+            else:
+                self.label_type = root + '/scribble/seginst'
+
+    def get_cls_label(self, cls_label):
+        cls_label_set = list(cls_label)
+
+        if self.ignore_class in cls_label_set:
+            cls_label_set.remove(self.ignore_class)
+        if 255 in cls_label_set:
+            cls_label_set.remove(255)
+
+        cls_label = np.zeros(self.ignore_class)
+        for i in cls_label_set:
+            cls_label[i] += 1
+        cls_label = torch.from_numpy(cls_label).float()
+        return cls_label
+
+    def __getitem__(self, item):
+        id = self.ids[item]
+        img = Image.open(os.path.join(self.root, id.split(' ')[0]))
+        mask = Image.open(os.path.join(self.root, id.split(' ')[1].replace('my_gts_cropped',self.label_type)))
+
+        if self.mode == 'val':
+            img, mask = normalize(img, mask)
+            return img, mask, id
+
+        cls_label = np.unique(np.asarray(mask))
+
+        # basic augmentation on all training images
+        img, mask = resize([img, mask], (0.5, 2.0))
+        img, mask = crop([img, mask], self.size)
+        img, mask = hflip(img, mask, p=0.5)
+
+        # # strong augmentation
+        if self.aug:
+            if random.random() < 0.5:
+                img = transforms.ColorJitter(0.5, 0.5, 0.5, 0.25)(img)
+            img = transforms.RandomGrayscale(p=0.1)(img)
+            img = blur(img, p=0.5)
+            img = random_bright(img, p=0.5)
+
+        img, mask = normalize(img, mask)
+        cls_label = self.get_cls_label(cls_label)
+        return img, mask, cls_label, id
+
+    def __len__(self):
+        return len(self.ids)
+
+
 class VocDataset(Dataset):
     def __init__(self, name, root, mode, size, aug=True):
         """
