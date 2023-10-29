@@ -261,6 +261,37 @@ def evaluate(model, loader, mode, cfg):
 
     return mIOU, iou_class
 
+def semi_evaluate(model, loader, mode, cfg):
+    model.eval()
+    assert mode in ['original', 'center_crop', 'sliding_window']
+    metric = meanIOU(num_classes=cfg['nclass'])
+
+    with torch.no_grad():
+        for img, mask, id,_,_,_ in loader:
+            img = img.cuda()
+
+            if mode == 'sliding_window':
+                final = pre_slide(model, img, num_classes=cfg['nclass'],
+                                 tile_size=(cfg['crop_size'], cfg['crop_size']), tta=False)
+
+                pred = final.argmax(dim=1)
+
+            else:
+                if mode == 'center_crop':
+                    h, w = img.shape[-2:]
+                    start_h, start_w = (h - cfg['crop_size']) // 2, (w - cfg['crop_size']) // 2
+                    img = img[:, :, start_h:start_h + cfg['crop_size'], start_w:start_w + cfg['crop_size']]
+                    mask = mask[:, start_h:start_h + cfg['crop_size'], start_w:start_w + cfg['crop_size']]
+
+                pred = model(img).argmax(1)
+
+            metric.add_batch(pred.cpu().numpy(), mask.numpy())
+
+    iou_class, mIOU = metric.evaluate()
+    mIOU = mIOU * 100.0
+
+    return mIOU, iou_class
+
 
 if __name__ == '__main__':
     def bitget(byteval, idx):

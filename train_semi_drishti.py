@@ -16,8 +16,8 @@ from torch.optim import SGD
 
 from torch.utils.data import DataLoader
 import yaml
-
-from dataset.sass import *
+from model.pseudo_tools import *
+from dataset.semi_sass import *
 from model.semseg.deeplabv3plus import DeepLabV3Plus
 from util.ohem import ProbOhemCrossEntropy2d
 from util.utils import count_params, AverageMeter, intersectionAndUnion, init_log, evaluate
@@ -30,8 +30,8 @@ os.environ['MASTER_PORT'] = '28890'
 # sh tools/train_city.sh 3 28890
 
 parser = argparse.ArgumentParser(description='Sparsely-annotated Semantic Segmentation')
-parser.add_argument('--config', type=str, required=True)
-parser.add_argument('--save-path', type=str, required=True)
+parser.add_argument('--config', type=str, default='configs/semi-drishti.yaml')
+parser.add_argument('--save-path', type=str, default='exp/semi-drishti')
 parser.add_argument('--local_rank', default=0, type=int)
 parser.add_argument('--port', default=None, type=int)
 
@@ -40,7 +40,8 @@ parser.add_argument('--port', default=None, type=int)
 def main():
     args = parser.parse_args()
 
-    cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
+    # cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
+    cfg = yaml.load(open(args.config, "r"), Loader=yaml.Loader)
 
     logger = init_log('global', logging.INFO)
     logger.propagate = 0
@@ -50,8 +51,8 @@ def main():
 
     os.makedirs(args.save_path, exist_ok=True)
 
-    cudnn.enabled = True
-    cudnn.benchmark = True
+    # cudnn.enabled = True
+    # cudnn.benchmark = True
 
     model = DeepLabV3Plus(cfg, aux=cfg['aux'])
 
@@ -62,16 +63,16 @@ def main():
                       'lr': cfg['lr'] * cfg['lr_multi']}], lr=cfg['lr'], momentum=0.9, weight_decay=1e-4)
 
     local_rank = int(os.environ["LOCAL_RANK"])
-    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     model.cuda(local_rank)
 
     ohem = False if cfg['criterion']['name'] == 'CELoss' else True
     use_weight = False
 
-    trainset = DrishtiDataset(cfg['dataset'], cfg['data_root'], cfg['mode'],
+    trainset = Semi_DrishtiDataset(cfg['dataset'], cfg['data_root'], cfg['mode'],
                            cfg['crop_size'], cfg['aug'])
-    valset = DrishtiDataset(cfg['dataset'], cfg['data_root'], 'val', None)
+    valset = Semi_DrishtiDataset(cfg['dataset'], cfg['data_root'], 'val', None)
 
 #     trainsampler = torch.utils.data.distributed.DistributedSampler(trainset)
     trainloader = DataLoader(trainset, batch_size=cfg['batch_size'],
@@ -84,6 +85,9 @@ def main():
     total_iters = len(trainloader) * cfg['epochs']
     previous_best = 0.0
 
+    #==========初始化prototype=========
+    prototype_manager = PrototypeManager(cfg['batch_size'],cfg['nclass'],256,torch.float32,'cuda:0')
+    #===================
     for epoch in range(cfg['epochs']):
         logger.info('===========> Epoch: {:}, LR: {:.4f}, Previous best: {:.2f}'.format(
             epoch, optimizer.param_groups[0]['lr'], previous_best))
@@ -95,28 +99,34 @@ def main():
 
 #         trainsampler.set_epoch(epoch)
 
-        for i, (img, mask, cls_label, id) in enumerate(trainloader):
-            img, mask, cls_label = img.cuda(), mask.cuda(), cls_label.cuda()
-            feat, pred = model(img)
+        for i, (labeled_img,labeled_mask,labeled_id,unlabeled_img,unlabeled_mask,unlabeled_id) in enumerate(trainloader):
+            labeled_img, labeled_mask, unlabeled_img, unlabeled_mask = labeled_img.cuda(), labeled_mask.cuda(), unlabeled_img.cuda(), unlabeled_mask.cuda()
 
-            seg_loss = loss_calc(pred, mask,
+            input_img = torch.cat([labeled_img,unlabeled_img],dim=0)
+
+            feat, pred = model(input_img)
+            labeled_feat, labeled_pred = feat[:cfg['batch_size'],...] ,pred[:cfg['batch_size'],...]
+            unlabeled_feat, unlabeled_pred = feat[cfg['batch_size']:,...] , pred[cfg['batch_size']:,...]
+
+            seg_loss = loss_calc(labeled_pred, labeled_mask,
                                  ignore_index=cfg['nclass'], multi=False,
                                  class_weight=use_weight, ohem=ohem)
-            
-            cls_loss = get_cls_loss(pred, cls_label, mask)
-            pred_cl = clean_mask(pred, cls_label, True)
+
+            prototypes = prototype_manager(labeled_feat, labeled_mask)
+            pseudo_mask_1 = pseudo_from_prototype(prototypes,unlabeled_feat)
+            pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                      mode='bilinear').squeeze().long()
 
             # Gaussian
-            cur_cls_label = build_cur_cls_label(mask, cfg['nclass'])
+            cur_cls_label = build_cur_cls_label(pseudo_mask_1, cfg['nclass'])
+            pred_cl = F.softmax(unlabeled_pred, dim=1)
 
-            #vecs:实际上就是每个类别的高斯分布的均值(b,num_class,c)
             #proto_loss：L_con
-            vecs, proto_loss = cal_protypes(feat, mask, cfg['nclass'])
+            vecs, proto_loss = cal_protypes(unlabeled_feat,pseudo_mask_1, cfg['nclass'])
 
             # res应该是代表公式(6)的平方(b,num_class,h,w)
-            res = GMM(feat, vecs, pred_cl, mask, cur_cls_label)
-
-            gmm_loss = cal_gmm_loss(pred.softmax(1), res, cur_cls_label, mask) + proto_loss + cls_loss
+            res = GMM(unlabeled_feat, vecs, pred_cl, pseudo_mask_1, cur_cls_label)
+            gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label, pseudo_mask_1) + proto_loss
 
             # total loss
             loss = seg_loss + gmm_loss
@@ -125,9 +135,9 @@ def main():
             loss.backward()
             optimizer.step()
 
-            loss_m.update(loss.item(), img.size()[0])
-            seg_m.update(seg_loss.item(), img.size()[0])
-            gmm_m.update(gmm_loss.item(), img.size()[0])
+            loss_m.update(loss.item(), labeled_img.size()[0])
+            seg_m.update(seg_loss.item(), labeled_img.size()[0])
+            gmm_m.update(gmm_loss.item(), labeled_img.size()[0])
 
             iters += 1
             lr = cfg['lr'] * (1 - iters / total_iters) ** 0.9
@@ -143,7 +153,7 @@ def main():
             eval_mode = 'center_crop' if epoch < cfg['epochs'] - 20 else 'sliding_window'
         else:
             eval_mode = 'original'
-        mIOU, iou_class = evaluate(model, valloader, eval_mode, cfg)
+        mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
 

@@ -6,6 +6,9 @@ import numpy as np
 from util.utils import *
 
 
+
+
+
 def build_cur_cls_label(mask, nclass):
     """some point annotations are cropped out, thus the prototypes are partial"""
     b = mask.size()[0]
@@ -64,11 +67,14 @@ def one_hot_2d(label, nclass):
 
 
 def cal_protypes(feat, mask, nclass):
+    # 将特征上采样与mask大小一致
     feat = F.interpolate(feat, size=mask.size()[-2:], mode='bilinear')
     b, c, h, w = feat.size()
+    # 初始化prototypes，形状为(b,class_num,c)
     prototypes = torch.zeros((b, nclass, c),
                            dtype=feat.dtype,
                            device=feat.device)
+    # batchsize中的样本逐一处理
     for i in range(b):
         cur_mask = mask[i]
         cur_mask_onehot = one_hot_2d(cur_mask, nclass)
@@ -84,10 +90,13 @@ def cal_protypes(feat, mask, nclass):
         if 255 in cur_set:
             cur_set.remove(255)
 
-        for cls in cur_set:
+        for cls in cur_set:# cur_set:0,1,2
+            #获取mask中当前类别的像素数量
             m = cur_mask_onehot[cls].view(1, h, w)
             sum = m.sum()
             m = m.expand(c, h, w).view(c, -1)
+            # cur_feat:(c,h,w) == > (c,h*w)
+            # (cur_feat.view(c, -1)[m == 1]):意思是只取出当前类别的特征，然后按照最后的维度求和，也就是相当于每个通道上的centriiod
             cls_feat = (cur_feat.view(c, -1)[m == 1]).view(c, -1).sum(-1)/(sum + 1e-6)
             cur_prototype[cls, :] = cls_feat
 
@@ -117,6 +126,7 @@ def proto_loss(prototypes, vecs, cur_cls_label):
 
     num = 0
     for i in range(nclass):
+        # 如果有当前类别
         if total_cls_label[i] == 1:
             for j in range(i+1, nclass):
                 if total_cls_label[j] == 1:
@@ -137,16 +147,20 @@ def GMM(feat, vecs, pred, true_mask, cls_label):
     # 传入的pred是一个经过clean_mask处理的
     b, k, oh, ow = pred.size()
 
+    # 将mask的大小调整来与feat的相同
     preserve = (true_mask < 255).long().view(b, 1, oh, ow)
     preserve = F.interpolate(preserve.float(), size=feat.size()[-2:], mode='bilinear')
+    # 将pred的大小调整来与feat相同
     pred = F.interpolate(pred, size=feat.size()[-2:], mode='bilinear')
     _, _, h, w = pred.size()
 
+    # vecs原本的形状是(b,num_class,c),现在调整为(b,num_class,c,1,1)
     vecs = vecs.view(b, k, -1, 1, 1)
+    # feat原来的形状是(b,c,h,w),现在调整为(b,1,c,h,w)
     feat = feat.view(b, 1, -1, h, w)
 
     """ 255 caused by cropping, using preserve mask """
-    abs = torch.abs(feat - vecs).mean(2)
+    abs = torch.abs(feat - vecs).mean(2) # 对应原论文公式(6)
     abs = abs * cls_label.view(b, k, 1, 1) * preserve.view(b, 1, h, w)
     abs = abs.view(b, k, h*w)
 
@@ -199,11 +213,14 @@ def loss_calc(preds, label, ignore_index, reduction='mean', multi=False, class_w
 
 def cal_gmm_loss(pred, res, cls_label, true_mask):
     n, k, h, w = pred.size()
+    # 这里对应公式(8)，但是这里将公式(7)的表示也带入其中
+    # res表示公式(7)的d^2,貌似还把方差这一项给忽略了,论文中说的是
     loss1 = - res * torch.log(pred + 1e-6) - (1 - res) * torch.log(1 - pred + 1e-6)
     loss1 = loss1/2
     loss1 = (loss1*cls_label).sum(1)/(cls_label.sum(1)+1e-6)
     loss1 = loss1[true_mask != 255].mean()
 
+    # 对应原论文公式(9)
     true_mask_one_hot = one_hot(true_mask, k)
     loss2 = - true_mask_one_hot * torch.log(res + 1e-6) \
             - (1 - true_mask_one_hot) * torch.log(1 - res + 1e-6)
