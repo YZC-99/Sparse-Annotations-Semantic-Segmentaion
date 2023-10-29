@@ -134,6 +134,7 @@ def proto_loss(prototypes, vecs, cur_cls_label):
 
 
 def GMM(feat, vecs, pred, true_mask, cls_label):
+    # 传入的pred是一个经过clean_mask处理的
     b, k, oh, ow = pred.size()
 
     preserve = (true_mask < 255).long().view(b, 1, oh, ow)

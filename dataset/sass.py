@@ -31,7 +31,7 @@ class Drishti_Combine_RIM_ONE_Dataset(Dataset):
         self.mode = mode
         self.size = size
         self.aug = aug
-        self.ignore_class = 4  # voc
+        self.ignore_class = 3
 
         self.img_path = root
         self.true_mask_path = root
@@ -59,16 +59,20 @@ class Drishti_Combine_RIM_ONE_Dataset(Dataset):
                 self.label_type = root + '/scribble/seginst'
 
     def get_cls_label(self, cls_label):
+        # 0，1，2，3
         cls_label_set = list(cls_label)
 
+        # 如果移除后就是0，1，2
         if self.ignore_class in cls_label_set:
             cls_label_set.remove(self.ignore_class)
         if 255 in cls_label_set:
             cls_label_set.remove(255)
 
+        # 创建3个label(0,0,0)
         cls_label = np.zeros(self.ignore_class)
         for i in cls_label_set:
             cls_label[i] += 1
+        # (1,1,1)
         cls_label = torch.from_numpy(cls_label).float()
         return cls_label
 
@@ -123,7 +127,7 @@ class DrishtiDataset(Dataset):
         self.mode = mode
         self.size = size
         self.aug = aug
-        self.ignore_class = 4  # voc
+        self.ignore_class = 3
 
         self.img_path = root
         self.true_mask_path = root
