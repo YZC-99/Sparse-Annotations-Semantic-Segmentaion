@@ -6,8 +6,8 @@ import torch.nn.functional as F
 from math import *
 from PIL import Image
 import matplotlib.pyplot as plt
-
-
+from torchmetrics import JaccardIndex,Dice,Accuracy,Recall,F1Score
+import copy
 def check_dir(dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
@@ -274,20 +274,20 @@ def semi_evaluate(model, loader, mode, cfg):
         for img, mask, id,_,_,_ in loader:
             img = img.cuda()
 
-            if mode == 'sliding_window':
-                final = pre_slide(model, img, num_classes=cfg['nclass'],
-                                 tile_size=(cfg['crop_size'], cfg['crop_size']), tta=False)
+            # if mode == 'sliding_window':
+            #     final = pre_slide(model, img, num_classes=cfg['nclass'],
+            #                      tile_size=(cfg['crop_size'], cfg['crop_size']), tta=False)
+            #
+            #     pred = final.argmax(dim=1)
+            #
+            # else:
+            #     if mode == 'center_crop':
+            #         h, w = img.shape[-2:]
+            #         start_h, start_w = (h - cfg['crop_size']) // 2, (w - cfg['crop_size']) // 2
+            #         img = img[:, :, start_h:start_h + cfg['crop_size'], start_w:start_w + cfg['crop_size']]
+            #         mask = mask[:, start_h:start_h + cfg['crop_size'], start_w:start_w + cfg['crop_size']]
 
-                pred = final.argmax(dim=1)
-
-            else:
-                if mode == 'center_crop':
-                    h, w = img.shape[-2:]
-                    start_h, start_w = (h - cfg['crop_size']) // 2, (w - cfg['crop_size']) // 2
-                    img = img[:, :, start_h:start_h + cfg['crop_size'], start_w:start_w + cfg['crop_size']]
-                    mask = mask[:, start_h:start_h + cfg['crop_size'], start_w:start_w + cfg['crop_size']]
-
-                pred = model(img).argmax(1)
+            pred = model(img).argmax(1)
 
             metric.add_batch(pred.cpu().numpy(), mask.numpy())
 
@@ -296,6 +296,47 @@ def semi_evaluate(model, loader, mode, cfg):
 
     return mIOU, iou_class
 
+def semi_odoc_evaluate(model, loader, mode, cfg):
+    model.eval()
+    assert mode in ['original', 'center_crop', 'sliding_window']
+    metric = meanIOU(num_classes=cfg['nclass'])
+    od_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
+    oc_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
+
+    with torch.no_grad():
+        for img, mask, id,_,_,_ in loader:
+            img = img.cuda()
+            pred = model(img).argmax(1)
+
+            od_preds = copy.deepcopy(pred)
+            od_y = copy.deepcopy(mask)
+            od_preds[od_preds != 1] = 0
+            od_y[od_y != 1] = 0
+
+            oc_preds = copy.deepcopy(pred)
+            oc_y = copy.deepcopy(mask)
+            oc_preds[oc_preds != 2] = 0
+            oc_preds[oc_preds != 0] = 1
+            oc_y[oc_y != 2] = 0
+            oc_y[oc_y != 0] = 1
+
+            # 计算 od_cover_oc
+            od_cover_gt = od_y + oc_y
+            od_cover_gt[od_cover_gt > 0] = 1
+            od_cover_preds = od_preds + oc_preds
+            od_cover_preds[od_cover_preds > 0] = 1
+
+            od_binary_jaccard.update(od_cover_preds,od_cover_gt)
+            oc_binary_jaccard.update(oc_preds,oc_y)
+
+
+            # metric.add_batch(pred.cpu().numpy(), mask.numpy())
+
+    # iou_class, mIOU = metric.evaluate()
+    mIOU = (od_binary_jaccard.compute() + oc_binary_jaccard.compute()) / 2
+    mIOU = mIOU * 100.0
+
+    return mIOU, "iou_class"
 
 if __name__ == '__main__':
     def bitget(byteval, idx):

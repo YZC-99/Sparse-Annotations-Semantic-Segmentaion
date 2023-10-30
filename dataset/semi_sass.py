@@ -43,7 +43,6 @@ class Semi_DrishtiDataset(Dataset):
             with open(id_path, 'r') as f:
                 self.labeled_ids = f.read().splitlines()
                 self.ids = [self.labeled_ids]
-
         else:
 
             labeled_id_path = 'dataset/splits/%s/labeled.txt' % name

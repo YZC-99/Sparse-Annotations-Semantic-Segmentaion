@@ -129,7 +129,20 @@ def main():
                 feat, pred = model(input_img)
                 labeled_feat, labeled_pred = feat[:cfg['batch_size'],...] ,pred[:cfg['batch_size'],...]
                 unlabeled_feat, unlabeled_pred = feat[cfg['batch_size']:,...] , pred[cfg['batch_size']:,...]
-
+                # 聚类实验
+                # import numpy as np
+                # from sklearn.cluster import KMeans
+                # data = unlabeled_feat[0].detach().cpu().numpy()  # 将 PyTorch 张量转换为 NumPy 数组
+                # # 调整数据形状为 (1*64*64, 256)，以便进行聚类
+                # data = data.reshape(-1, 256)
+                # n_clusters = 3
+                # # 使用 K-Means 进行聚类
+                # kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(data)
+                # # 获取聚类标签
+                # cluster_labels = kmeans.labels_
+                # print(np.count_nonzero(cluster_labels==1))
+                # print(np.count_nonzero(cluster_labels==2))
+                # print("=====================")
 
                 sup_loss = loss_calc(labeled_pred, labeled_mask,
                                      ignore_index=cfg['nclass'], multi=False,
@@ -148,7 +161,6 @@ def main():
                 pseudo_mask_2 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
                 pseudo_mask_2 = F.interpolate(pseudo_mask_2.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
                                               mode='bilinear').squeeze().long()
-
                 # 找到相同类别的位置
                 intersection = (pseudo_mask_1 == pseudo_mask_2)
                 # 将相交部分作为新的标签
@@ -207,7 +219,8 @@ def main():
             eval_mode = 'center_crop' if epoch < cfg['epochs'] - 20 else 'sliding_window'
         else:
             eval_mode = 'original'
-        mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
+        # mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
+        mIOU, iou_class = semi_odoc_evaluate(model, valloader, eval_mode, cfg)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
 
