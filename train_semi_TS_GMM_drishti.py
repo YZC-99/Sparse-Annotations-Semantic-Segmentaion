@@ -141,7 +141,7 @@ def main():
                 #             prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
 
                 threshold = 0.0
-                pseudo_mask_1 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
+                pseudo_mask_1 = unlabeled_mask_from_teacher
                 pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
                                               mode='bilinear').squeeze().long()
 
