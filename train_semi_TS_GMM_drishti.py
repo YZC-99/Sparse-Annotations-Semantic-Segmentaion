@@ -145,6 +145,15 @@ def main():
                 pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
                                               mode='bilinear').squeeze().long()
 
+                pseudo_mask_2 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
+                pseudo_mask_2 = F.interpolate(pseudo_mask_2.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                              mode='bilinear').squeeze().long()
+
+                # 找到相同类别的位置
+                intersection = (pseudo_mask_1 == pseudo_mask_2)
+                # 将相交部分作为新的标签
+                pseudo_mask_1 = pseudo_mask_1 * intersection
+
                 # Gaussian
                 cur_cls_label = build_cur_cls_label(pseudo_mask_1, cfg['nclass'])
                 pred_cl = F.softmax(unlabeled_pred, dim=1)
