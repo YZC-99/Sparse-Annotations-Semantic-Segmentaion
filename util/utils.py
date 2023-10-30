@@ -306,6 +306,7 @@ def semi_odoc_evaluate(model, loader, mode, cfg):
     with torch.no_grad():
         for img, mask, id,_,_,_ in loader:
             img = img.cuda()
+            mask = mask.cuda()
             pred = model(img).argmax(1)
 
             od_preds = copy.deepcopy(pred)
