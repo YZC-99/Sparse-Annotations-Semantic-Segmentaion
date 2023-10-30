@@ -115,7 +115,7 @@ class Correct_PrototypeManager(nn.Module):
             cur_pred = preds[i]
             cur_mask_onehot = one_hot_2d(cur_mask, nclass)
             cur_pred_onehot = one_hot_2d(cur_pred, nclass)
-            cur_mask = cur_mask * cur_pred_onehot
+            cur_mask_onehot = cur_mask_onehot * cur_pred_onehot
 
             cur_feat = feats[i]
             cur_prototype = torch.zeros((nclass, c),
