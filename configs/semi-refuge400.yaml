@@ -1,0 +1,31 @@
+# arguments for dataset
+dataset: REFUGE/400semi
+nclass: 3
+crop_size: 256
+aug: False
+data_root: /root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion/data/REFUGE400_semi
+#data_root: E:/Deep_Learning_DATABASE/fundus_images/Drishti-GS
+mode: 'semi'
+
+# arguments for training
+epochs: 240
+batch_size: 4
+lr: 0.000625  # 1GPUs
+lr_multi: 1.0
+criterion:
+  name: CELoss
+  use_class_weight: False
+  kwargs:
+    ignore_index: 255
+#    thresh: 0.7
+#    min_kept: 100000
+conf_thresh: 0.95
+weight: 0.5
+
+
+# arguments for model
+aux: False
+backbone: resnet50
+multi_grid: True
+replace_stride_with_dilation: [False, True, True]
+dilations: [12, 24, 36]
