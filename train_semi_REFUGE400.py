@@ -55,6 +55,7 @@ def main():
     # cudnn.benchmark = True
 
     model = DeepLabV3Plus(cfg, aux=cfg['aux'])
+    model_teacher = DeepLabV3Plus(cfg, aux=cfg['aux'])
 
     logger.info('Total params: {:.1f}M\n'.format(count_params(model)))
 
@@ -66,6 +67,7 @@ def main():
     # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     model.cuda(local_rank)
+    model_teacher.cuda(local_rank)
 
     ohem = False if cfg['criterion']['name'] == 'CELoss' else True
     use_weight = False
@@ -95,8 +97,10 @@ def main():
 
         model.train()
         loss_m = AverageMeter()
-        seg_m = AverageMeter()
+        sup_m = AverageMeter()
         labled_proto_m = AverageMeter()
+        pseudo_sup_m = AverageMeter()
+        unlabled_proto_m = AverageMeter()
         gmm_m = AverageMeter()
 
 #         trainsampler.set_epoch(epoch)
@@ -104,48 +108,88 @@ def main():
         for i, (labeled_img,labeled_mask,labeled_id,unlabeled_img,unlabeled_mask,unlabeled_id) in enumerate(trainloader):
             labeled_img, labeled_mask, unlabeled_img, unlabeled_mask = labeled_img.cuda(), labeled_mask.cuda(), unlabeled_img.cuda(), unlabeled_mask.cuda()
 
-            input_img = torch.cat([labeled_img,unlabeled_img],dim=0)
-
-            feat, pred = model(input_img)
-            labeled_feat, labeled_pred = feat[:cfg['batch_size'],...] ,pred[:cfg['batch_size'],...]
-            unlabeled_feat, unlabeled_pred = feat[cfg['batch_size']:,...] , pred[cfg['batch_size']:,...]
-
-            seg_loss = loss_calc(labeled_pred, labeled_mask,
-                                 ignore_index=cfg['nclass'], multi=False,
-                                 class_weight=use_weight, ohem=ohem)
-
-            prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
-#             prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
-            if epoch < 20:
-                threshold = 0.0
+            if epoch < cfg.get("sup_epochs",1):
+                # model forward
+                labeled_feat, labeled_pred = model(labeled_img)
+                sup_loss = loss_calc(labeled_pred, labeled_mask,
+                                     ignore_index=cfg['nclass'], multi=False,
+                                     class_weight=use_weight, ohem=ohem)
+                labled_proto_loss = 0 * sup_loss
+                pseudo_sup_loss = 0 * sup_loss
+                unlabled_proto_loss = 0 * sup_loss
+                gmm_loss = 0 * sup_loss
             else:
-                threshold = 0.1
-            pseudo_mask_1 = pseudo_from_prototype(prototypes,unlabeled_feat,threshold)
-            pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
-                                      mode='bilinear').squeeze().long()
+                # teacher forward
+                model_teacher.eval()
+                unlabeled_pred_teacher = model_teacher(unlabeled_img)
+                unlabeled_mask_from_teacher = torch.argmax(unlabeled_pred_teacher, dim=1)
 
-            # Gaussian
-            cur_cls_label = build_cur_cls_label(pseudo_mask_1, cfg['nclass'])
-            pred_cl = F.softmax(unlabeled_pred, dim=1)
+                # model forward
+                input_img = torch.cat([labeled_img,unlabeled_img],dim=0)
+                feat, pred = model(input_img)
+                labeled_feat, labeled_pred = feat[:cfg['batch_size'],...] ,pred[:cfg['batch_size'],...]
+                unlabeled_feat, unlabeled_pred = feat[cfg['batch_size']:,...] , pred[cfg['batch_size']:,...]
+                # 聚类实验
+                # import numpy as np
+                # from sklearn.cluster import KMeans
+                # data = unlabeled_feat[0].detach().cpu().numpy()  # 将 PyTorch 张量转换为 NumPy 数组
+                # # 调整数据形状为 (1*64*64, 256)，以便进行聚类
+                # data = data.reshape(-1, 256)
+                # n_clusters = 3
+                # # 使用 K-Means 进行聚类
+                # kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(data)
+                # # 获取聚类标签
+                # cluster_labels = kmeans.labels_
+                # print(np.count_nonzero(cluster_labels==1))
+                # print(np.count_nonzero(cluster_labels==2))
+                # print("=====================")
 
-            #proto_loss：L_con
-            vecs, unlabled_proto_loss = cal_protypes(unlabeled_feat,pseudo_mask_1, cfg['nclass'])
-            _, labled_proto_loss = cal_protypes(labeled_feat,labeled_mask, cfg['nclass'])
+                sup_loss = loss_calc(labeled_pred, labeled_mask,
+                                     ignore_index=cfg['nclass'], multi=False,
+                                     class_weight=use_weight, ohem=ohem)
+                pseudo_sup_loss = loss_calc(unlabeled_pred, unlabeled_mask_from_teacher,
+                                     ignore_index=cfg['nclass'], multi=False,
+                                     class_weight=use_weight, ohem=ohem)
+                prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
+                #             prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
 
-            # res应该是代表公式(6)的平方(b,num_class,h,w)
-            res = GMM(unlabeled_feat, vecs, pred_cl, pseudo_mask_1, cur_cls_label)
-            gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label, pseudo_mask_1) + unlabled_proto_loss
+                threshold = 0.0
+                pseudo_mask_1 = unlabeled_mask_from_teacher
+                pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                              mode='bilinear').squeeze().long()
 
-            # total loss
-            loss = seg_loss + labled_proto_loss + gmm_loss
+                # pseudo_mask_2 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
+                # pseudo_mask_2 = F.interpolate(pseudo_mask_2.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                #                               mode='bilinear').squeeze().long()
+                # 找到相同类别的位置
+                # intersection = (pseudo_mask_1 == pseudo_mask_2)
+                # # 将相交部分作为新的标签
+                # pseudo_mask_1 = pseudo_mask_1 * intersection
+
+                # Gaussian
+                cur_cls_label = build_cur_cls_label(pseudo_mask_1, cfg['nclass'])
+                pred_cl = F.softmax(unlabeled_pred, dim=1)
+
+                # proto_loss：L_con
+                vecs, unlabled_proto_loss = cal_protypes(unlabeled_feat, pseudo_mask_1, cfg['nclass'])
+                _, labled_proto_loss = cal_protypes(labeled_feat, labeled_mask, cfg['nclass'])
+
+                # res应该是代表公式(6)的平方(b,num_class,h,w)
+                res = GMM(unlabeled_feat, vecs, pred_cl, pseudo_mask_1, cur_cls_label)
+                gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label,
+                                        pseudo_mask_1) + unlabled_proto_loss
+
+            loss = sup_loss + labled_proto_loss + pseudo_sup_loss + unlabled_proto_loss + gmm_loss
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
             loss_m.update(loss.item(), labeled_img.size()[0])
-            seg_m.update(seg_loss.item(), labeled_img.size()[0])
+            sup_m.update(sup_loss.item(), labeled_img.size()[0])
             labled_proto_m.update(labled_proto_loss.item(), labeled_img.size()[0])
+            pseudo_sup_m.update(pseudo_sup_loss.item(), labeled_img.size()[0])
+            unlabled_proto_m.update(unlabled_proto_loss.item(), labeled_img.size()[0])
             gmm_m.update(gmm_loss.item(), labeled_img.size()[0])
 
             iters += 1
@@ -153,16 +197,30 @@ def main():
             optimizer.param_groups[0]["lr"] = lr
             optimizer.param_groups[1]["lr"] = lr * cfg['lr_multi']
 
+
+            #=========  update teacher model with EMA ===========
+            if epoch > cfg.get("sup_epochs",1):
+                ema_decay_origin = 0.99
+                with torch.no_grad():
+                    ema_decay = ema_decay_origin
+                    for t_params, s_params in zip(
+                            model_teacher.parameters(), model.parameters()
+                    ):
+                        t_params.data = (
+                                ema_decay * t_params.data + (1 - ema_decay) * s_params.data
+                        )
+
             if (i % (max(2, len(trainloader) // 8)) == 0):
-                logger.info('Iters:{:}, loss:{:.3f}, seg_loss:{:.3f}, labled_proto_loss:{:.3f}, '
-                            'gmm_loss:{:.3f}'.format
-                            (i, loss_m.avg, seg_m.avg,labled_proto_m.avg, gmm_m.avg))
+                logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, labled_proto_loss:{:.3f}'
+                            ', pseudo_sup_loss:{:.3f}, unlabled_proto_loss:{:.3f}, gmm_loss:{:.3f}'.format
+                            (i, loss_m.avg, sup_m.avg,labled_proto_m.avg, pseudo_sup_m.avg,unlabled_proto_m.avg,gmm_m.avg))
 
         if cfg['dataset'] == 'cityscapes':
             eval_mode = 'center_crop' if epoch < cfg['epochs'] - 20 else 'sliding_window'
         else:
             eval_mode = 'original'
-        mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
+        # mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
+        mIOU, iou_class = semi_odoc_evaluate(model, valloader, eval_mode, cfg)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
 
