@@ -147,21 +147,21 @@ def main():
             optimizer.param_groups[1]["lr"] = lr * cfg['lr_multi']
 
 
-        #=========  update teacher model with EMA ===========
-        if epoch > 5:
-            ema_decay_origin = 0.99
-            with torch.no_grad():
-                ema_decay = ema_decay_origin,
-                for t_params, s_params in zip(
-                        model_teacher.parameters(), model.parameters()
-                ):
-                    t_params.data = (
-                            ema_decay * t_params.data + (1 - ema_decay) * s_params.data
-                    )
+            #=========  update teacher model with EMA ===========
+            if epoch > 5:
+                ema_decay_origin = 0.99
+                with torch.no_grad():
+                    ema_decay = ema_decay_origin,
+                    for t_params, s_params in zip(
+                            model_teacher.parameters(), model.parameters()
+                    ):
+                        t_params.data = (
+                                ema_decay * t_params.data + (1 - ema_decay) * s_params.data
+                        )
 
-                if (i % (max(2, len(trainloader) // 8)) == 0):
-                    logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, labled_proto_loss:{:.3f}'.format
-                                (i, loss_m.avg, sup_m.avg,pseudo_sup_m.avg))
+            if (i % (max(2, len(trainloader) // 8)) == 0):
+                logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, labled_proto_loss:{:.3f}'.format
+                            (i, loss_m.avg, sup_m.avg,pseudo_sup_m.avg))
 
         if cfg['dataset'] == 'cityscapes':
             eval_mode = 'center_crop' if epoch < cfg['epochs'] - 20 else 'sliding_window'
