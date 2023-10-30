@@ -9,7 +9,6 @@ mode: 'semi'
 
 # arguments for training
 epochs: 240
-sup_epochs: 100
 batch_size: 4
 lr: 0.000625  # 1GPUs
 lr_multi: 1.0
