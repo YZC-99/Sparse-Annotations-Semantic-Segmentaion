@@ -152,7 +152,7 @@ def main():
             if epoch > 5:
                 ema_decay_origin = 0.99
                 with torch.no_grad():
-                    ema_decay = ema_decay_origin,
+                    ema_decay = ema_decay_origin
                     for t_params, s_params in zip(
                             model_teacher.parameters(), model.parameters()
                     ):
