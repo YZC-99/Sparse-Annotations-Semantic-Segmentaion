@@ -128,14 +128,15 @@ def main():
             pred_cl = F.softmax(unlabeled_pred, dim=1)
 
             #proto_loss：L_con
-            vecs, proto_loss = cal_protypes(unlabeled_feat,pseudo_mask_1, cfg['nclass'])
+            vecs, unlabled_proto_loss = cal_protypes(unlabeled_feat,pseudo_mask_1, cfg['nclass'])
+            _, labled_proto_loss = cal_protypes(labeled_feat,labeled_mask, cfg['nclass'])
 
             # res应该是代表公式(6)的平方(b,num_class,h,w)
             res = GMM(unlabeled_feat, vecs, pred_cl, pseudo_mask_1, cur_cls_label)
-            gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label, pseudo_mask_1) + proto_loss
+            gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label, pseudo_mask_1) + unlabled_proto_loss
 
             # total loss
-            loss = seg_loss + gmm_loss
+            loss = seg_loss + gmm_loss + labled_proto_loss
 
             optimizer.zero_grad()
             loss.backward()
