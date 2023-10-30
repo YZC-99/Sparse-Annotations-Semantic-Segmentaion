@@ -190,8 +190,9 @@ def main():
                         )
 
             if (i % (max(2, len(trainloader) // 8)) == 0):
-                logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, pseudo_sup_loss:{:.3f}'.format
-                            (i, loss_m.avg, sup_m.avg,pseudo_sup_m.avg))
+                logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, labled_proto_loss:{:.3f}'
+                            ', pseudo_sup_loss:{:.3f}, unlabled_proto_loss:{:.3f}, gmm_loss:{:.3f}'.format
+                            (i, loss_m.avg, sup_m.avg,labled_proto_m.avg, pseudo_sup_m.avg,unlabled_proto_m.avg,gmm_m.avg))
 
         if cfg['dataset'] == 'cityscapes':
             eval_mode = 'center_crop' if epoch < cfg['epochs'] - 20 else 'sliding_window'
