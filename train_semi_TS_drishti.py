@@ -67,6 +67,7 @@ def main():
     # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     model.cuda(local_rank)
+    model_teacher.cuda(local_rank)
 
     ohem = False if cfg['criterion']['name'] == 'CELoss' else True
     use_weight = False
