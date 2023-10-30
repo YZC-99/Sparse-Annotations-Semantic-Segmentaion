@@ -86,7 +86,8 @@ def main():
     previous_best = 0.0
 
     #==========初始化prototype=========
-    prototype_manager = PrototypeManager(cfg['batch_size'],cfg['nclass'],256,torch.float32,'cuda:0')
+    # prototype_manager = PrototypeManager(cfg['batch_size'],cfg['nclass'],256,torch.float32,'cuda:0')
+    prototype_manager = Correct_PrototypeManager(cfg['batch_size'],cfg['nclass'],256,torch.float32,'cuda:0')
     #===================
     for epoch in range(cfg['epochs']):
         logger.info('===========> Epoch: {:}, LR: {:.4f}, Previous best: {:.2f}'.format(

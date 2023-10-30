@@ -37,7 +37,7 @@ def one_hot_2d(label, nclass):
 
 
 class PrototypeManager(nn.Module):
-    def __init__(self, batch_size, num_classes, num_channels, dtype, device):
+    def __init__(self, num_classes, num_channels, dtype, device):
         super(PrototypeManager, self).__init__()
         self.prototypes = torch.zeros((num_classes, num_channels),
                                       dtype=dtype, device=device)
@@ -94,6 +94,70 @@ class PrototypeManager(nn.Module):
     def forward(self, feats, masks):
         self.update_prototypes(feats, masks)
         return self.prototypes
+
+class Correct_PrototypeManager(nn.Module):
+    def __init__(self,num_classes, num_channels, dtype, device):
+        super(Correct_PrototypeManager, self).__init__()
+        self.prototypes = torch.zeros((num_classes, num_channels),
+                                      dtype=dtype, device=device)
+        # self.register_buffer('prototypes', self.prototypes)
+        self.initialized = False
+        self.num_classes = num_classes
+
+    def compute_prototype(self,feats,preds,masks,nclass):
+        feats = F.interpolate(feats, size=masks.size()[-2:], mode='bilinear')
+        b, c, h, w = feats.size()
+        prototypes = torch.zeros((nclass, c),
+                                 dtype=feats.dtype,
+                                 device=feats.device)
+        for i in range(b):
+            cur_mask = masks[i]
+            cur_pred = preds[i]
+            cur_mask_onehot = one_hot_2d(cur_mask, nclass)
+            cur_pred_onehot = one_hot_2d(cur_pred, nclass)
+            cur_mask = cur_mask * cur_pred_onehot
+
+            cur_feat = feats[i]
+            cur_prototype = torch.zeros((nclass, c),
+                                        dtype=feats.dtype,
+                                        device=feats.device)
+
+            cur_set = list(torch.unique(cur_mask))
+            if nclass in cur_set:
+                cur_set.remove(nclass)
+            if 255 in cur_set:
+                cur_set.remove(255)
+
+            for cls in cur_set:  # cur_set:0,1,2
+                # 获取mask中当前类别的像素数量
+                m = cur_mask_onehot[cls].view(1, h, w)
+                sum = m.sum()
+                m = m.expand(c, h, w).view(c, -1)
+                cls_feat = (cur_feat.view(c, -1)[m == 1]).view(c, -1).sum(-1) / (sum + 1e-6)
+                cur_prototype[cls, :] = cls_feat
+            prototypes += cur_prototype
+        return prototypes / b
+
+    def initialize(self, feats,preds, masks, num_classes):
+        # 您的初始化逻辑，例如：
+        new_prototypes = self.compute_prototype(feats,preds, masks, num_classes)
+        self.prototypes = new_prototypes
+        self.initialized = True
+
+    def update_prototypes(self, feats,preds, masks, momentum=0.99):
+        if not self.initialized:
+            self.initialize(feats,preds, masks, self.num_classes)
+            return
+        # 使用EMA更新
+        new_prototypes = self.compute_prototype(feats,preds,masks,self.num_classes)  # compute prototypes based on feats and masks
+        # new_prototypes = new_prototypes.mean(dim=0)
+        self.prototypes = (1.0 - momentum) * self.prototypes + momentum * new_prototypes
+
+    def forward(self, feats,preds,masks):
+        preds = torch.argmax(preds, dim=1)
+        self.update_prototypes(feats,preds, masks)
+        return self.prototypes
+
 
 
 def pseudo_from_prototype(prototypes,feats):
