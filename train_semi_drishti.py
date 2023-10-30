@@ -96,6 +96,7 @@ def main():
         model.train()
         loss_m = AverageMeter()
         seg_m = AverageMeter()
+        labled_proto_m = AverageMeter()
         gmm_m = AverageMeter()
 
 #         trainsampler.set_epoch(epoch)
@@ -136,7 +137,7 @@ def main():
             gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label, pseudo_mask_1) + unlabled_proto_loss
 
             # total loss
-            loss = seg_loss + gmm_loss + labled_proto_loss
+            loss = seg_loss + labled_proto_loss + gmm_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -144,6 +145,7 @@ def main():
 
             loss_m.update(loss.item(), labeled_img.size()[0])
             seg_m.update(seg_loss.item(), labeled_img.size()[0])
+            labled_proto_m.update(labled_proto_loss.item(), labeled_img.size()[0])
             gmm_m.update(gmm_loss.item(), labeled_img.size()[0])
 
             iters += 1
@@ -152,9 +154,9 @@ def main():
             optimizer.param_groups[1]["lr"] = lr * cfg['lr_multi']
 
             if (i % (max(2, len(trainloader) // 8)) == 0):
-                logger.info('Iters:{:}, loss:{:.3f}, seg_loss:{:.3f}, '
+                logger.info('Iters:{:}, loss:{:.3f}, seg_loss:{:.3f}, labled_proto_loss:{:.3f}, '
                             'gmm_loss:{:.3f}'.format
-                            (i, loss_m.avg, seg_m.avg, gmm_m.avg))
+                            (i, loss_m.avg, seg_m.avg,labled_proto_m.avg, gmm_m.avg))
 
         if cfg['dataset'] == 'cityscapes':
             eval_mode = 'center_crop' if epoch < cfg['epochs'] - 20 else 'sliding_window'
