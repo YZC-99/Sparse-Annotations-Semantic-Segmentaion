@@ -115,7 +115,11 @@ def main():
 
             # prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
             prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
-            pseudo_mask_1 = pseudo_from_prototype(prototypes,unlabeled_feat,0.0)
+            if epoch < 20:
+                threshold = 0.0
+            else:
+                threshold = 0.1
+            pseudo_mask_1 = pseudo_from_prototype(prototypes,unlabeled_feat,threshold)
             pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
                                       mode='bilinear').squeeze().long()
 
