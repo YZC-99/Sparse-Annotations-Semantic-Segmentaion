@@ -18,20 +18,20 @@ MODE = None
 
 
 def parse_args():
-    name = 'pascal'
-    mode = 'point'
+    name = 'semi-drishti'
+    mode = 'semi'
 
     parser = argparse.ArgumentParser(description='SASS Framework')
     parser.add_argument('--resume_model', type=str,
-                        default='./exp/%s/resnet101_67.80.pth'%(name+'/'+mode))
-    parser.add_argument('--config', type=str, default='./configs/%s'%(name+'.yaml'))
-    parser.add_argument('--save-mask-path', type=str, default='exp/%s/predicts' %(name+'/'+mode))
+                        default='./exp/%s/resnet50_80.61.pth' % (name))
+    parser.add_argument('--config', type=str, default='./configs/%s' % (name + '.yaml'))
+    parser.add_argument('--save-mask-path', type=str, default='exp/%s/predicts' % (name + '/' + mode))
     args = parser.parse_args()
     return args
 
 
 def get_dataset(cfg):
-    if cfg['dataset'] == 'Drishti-GS':
+    if cfg['dataset'] == 'Drishti-GS/semi-supervised':
         valset = DrishtiDataset(cfg['dataset'], cfg['data_root'], 'val', None)
 
     elif cfg['dataset'] == 'cityscapes':
@@ -70,7 +70,7 @@ def main(args):
                                  tile_size=(cfg['crop_size'], cfg['crop_size']), tta=False)
             else:
                 pred = ms_test(model, img)
-               
+
             pred = torch.argmax(pred, dim=1)
 
             metric.add_batch(pred.cpu().numpy(), mask.numpy())
