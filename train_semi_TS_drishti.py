@@ -116,7 +116,7 @@ def main():
             else:
                 # teacher forward
                 model_teacher.eval()
-                unlabeled_feat_teacher, unlabeled_pred_teacher = model_teacher(unlabeled_img)
+                unlabeled_pred_teacher = model_teacher(unlabeled_img)
                 unlabeled_mask_from_teacher = torch.argmax(unlabeled_pred_teacher, dim=1)
 
                 # model forward
