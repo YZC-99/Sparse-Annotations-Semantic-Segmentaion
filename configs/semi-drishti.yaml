@@ -1,7 +1,7 @@
 # arguments for dataset
 dataset: Drishti-GS/semi-supervised
 nclass: 3
-crop_size: 256
+crop_size: 128
 aug: False
 data_root: /root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion/data/Drishti-GS
 #data_root: E:/Deep_Learning_DATABASE/fundus_images/Drishti-GS

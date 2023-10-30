@@ -86,8 +86,8 @@ def main():
     previous_best = 0.0
 
     #==========初始化prototype=========
-    # prototype_manager = PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
-    prototype_manager = Correct_PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
+    prototype_manager = PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
+#     prototype_manager = Correct_PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
     #===================
     for epoch in range(cfg['epochs']):
         logger.info('===========> Epoch: {:}, LR: {:.4f}, Previous best: {:.2f}'.format(
@@ -114,8 +114,8 @@ def main():
                                  ignore_index=cfg['nclass'], multi=False,
                                  class_weight=use_weight, ohem=ohem)
 
-            # prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
-            prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
+            prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
+#             prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
             if epoch < 20:
                 threshold = 0.0
             else:
