@@ -191,7 +191,7 @@ def pseudo_from_prototype(prototypes,feats,threshold=0.0):
     diff = max_values - second_max_values
 
     # 6. 根据差值与阈值的比较，得到伪标签
-    pseudo_labels = torch.where(diff > threshold, max_indices, torch.tensor(3, dtype=torch.long).to(similarity.device))
+    pseudo_labels = torch.where(diff > threshold, max_indices, torch.tensor(255, dtype=torch.long).to(similarity.device))
 
     # pseudo_labels = torch.argmax(similarity, dim=1)  # b x numclass_ x h x w
 
