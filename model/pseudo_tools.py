@@ -160,7 +160,7 @@ class Correct_PrototypeManager(nn.Module):
 
 
 
-def pseudo_from_prototype(prototypes,feats):
+def pseudo_from_prototype(prototypes,feats,threshold=0.0):
     """
     我想让feats里面的每个像素与prototypes中的每个类别进行余弦相似度计算，距离最近的那个就是当前feats的伪标签
     最后返回一个mask
@@ -175,7 +175,25 @@ def pseudo_from_prototype(prototypes,feats):
     similarity = torch.einsum('nc,bchw->bnhw', prototypes_norm, feats_norm)  # b x num_class x h x w
 
     # 步骤3: 获取最相似的原型作为伪标签
-    pseudo_labels = torch.argmax(similarity, dim=1)  # b x h x w
+    '''
+    原来我的代码思想是，返回值最大的那一层的索引回去用作伪标签的值，但现在我希望
+    1、对similarity在dim=1上进行softmax
+    2、设置一个阈值，如果在dim上最大的那个值与另外通道的的差值没有超过这个阈值，则使用3为当前点的标签，而不是使用当前最大值通道值为标签
+    3、如果在dim上最大的那个值与另外通道的的差值超过这个阈值，则当前最大值通道值为标签
+    '''
+    probabilities = F.softmax(similarity,dim=1)
+    # 2. 找到最大概率及其索引
+    max_values, max_indices = torch.max(probabilities, dim=1)
+    # 3. 找到第二大的概率
+    sorted_probs, _ = torch.sort(probabilities, descending=True, dim=1)
+    second_max_values = sorted_probs[:, 1, :, :]
+    # 4. 计算最大概率与第二大概率之间的差值
+    diff = max_values - second_max_values
+
+    # 6. 根据差值与阈值的比较，得到伪标签
+    pseudo_labels = torch.where(diff > threshold, max_indices, torch.tensor(3, dtype=torch.long).to(similarity.device))
+
+    # pseudo_labels = torch.argmax(similarity, dim=1)  # b x numclass_ x h x w
 
     return pseudo_labels
 
