@@ -46,10 +46,10 @@ class Semi_DrishtiDataset(Dataset):
 
         else:
 
-            # labeled_id_path = 'dataset/splits/%s/labeled.txt' % name
-            # unlabeled_id_path = 'dataset/splits/%s/unlabeled.txt' % name
-            labeled_id_path = 'D:/Dev_projects/AGMM-SASS/dataset/splits/%s/labeled.txt' % name
-            unlabeled_id_path = 'D:/Dev_projects/AGMM-SASS/dataset/splits/%s/unlabeled.txt' % name
+            labeled_id_path = 'dataset/splits/%s/labeled.txt' % name
+            unlabeled_id_path = 'dataset/splits/%s/unlabeled.txt' % name
+            # labeled_id_path = 'D:/Dev_projects/AGMM-SASS/dataset/splits/%s/labeled.txt' % name
+            # unlabeled_id_path = 'D:/Dev_projects/AGMM-SASS/dataset/splits/%s/unlabeled.txt' % name
             with open(labeled_id_path, 'r') as f:
                 self.labeled_ids = f.read().splitlines()
             with open(unlabeled_id_path, 'r') as f:
