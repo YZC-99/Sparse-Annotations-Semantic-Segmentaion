@@ -106,7 +106,7 @@ def main():
         for i, (labeled_img,labeled_mask,labeled_id,unlabeled_img,unlabeled_mask,unlabeled_id) in enumerate(trainloader):
             labeled_img, labeled_mask, unlabeled_img, unlabeled_mask = labeled_img.cuda(), labeled_mask.cuda(), unlabeled_img.cuda(), unlabeled_mask.cuda()
 
-            if epoch < 5:
+            if epoch < cfg['sup_epochs']:
                 # model forward
                 labeled_feat, labeled_pred = model(labeled_img)
                 sup_loss = loss_calc(labeled_pred, labeled_mask,
@@ -149,7 +149,7 @@ def main():
 
 
             #=========  update teacher model with EMA ===========
-            if epoch > 5:
+            if epoch > cfg['sup_epochs']:
                 ema_decay_origin = 0.99
                 with torch.no_grad():
                     ema_decay = ema_decay_origin
