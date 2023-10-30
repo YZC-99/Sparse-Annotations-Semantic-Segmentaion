@@ -1,7 +1,7 @@
 # arguments for dataset
 dataset: Drishti-GS/semi-supervised
 nclass: 3
-crop_size: 128
+crop_size: 256
 aug: False
 data_root: /root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion/data/Drishti-GS
 #data_root: E:/Deep_Learning_DATABASE/fundus_images/Drishti-GS
@@ -9,7 +9,7 @@ mode: 'semi'
 
 # arguments for training
 epochs: 240
-batch_size: 2
+batch_size: 4
 lr: 0.000625  # 1GPUs
 lr_multi: 1.0
 criterion:

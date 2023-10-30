@@ -161,7 +161,7 @@ def main():
                         )
 
             if (i % (max(2, len(trainloader) // 8)) == 0):
-                logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, labled_proto_loss:{:.3f}'.format
+                logger.info('Iters:{:}, loss:{:.3f}, sup_loss:{:.3f}, pseudo_sup_loss:{:.3f}'.format
                             (i, loss_m.avg, sup_m.avg,pseudo_sup_m.avg))
 
         if cfg['dataset'] == 'cityscapes':
