@@ -229,9 +229,9 @@ def main():
         mIOU = eval_outs['mIOU']
         OD_IOU = eval_outs['OD_IOU']
         OC_IOU = eval_outs['OC_IOU']
-        writer.add_scalar('IOU/OD',OD_IOU,i)
-        writer.add_scalar('IOU/OC',OC_IOU,i)
-        writer.add_scalar('IOU/mIOU',mIOU,i)
+        writer.add_scalar('IOU/OD',OD_IOU,epoch)
+        writer.add_scalar('IOU/OC',OC_IOU,epoch)
+        writer.add_scalar('IOU/mIOU',mIOU,epoch)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
 
