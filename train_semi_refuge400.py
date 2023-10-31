@@ -45,7 +45,8 @@ def main():
     # cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
     cfg = yaml.load(open(args.config, "r"), Loader=yaml.Loader)
     cfg['info'] = args.info
-    yaml.dump(cfg, open(os.path.join(args.save_path,'config.yaml'), "w",encoding='utf-8'), default_flow_style=False)
+    with open(os.path.join(args.save_path,'config.yaml'), 'w', encoding='utf-8') as yaml_file:
+        yaml.dump(cfg, yaml_file, default_flow_style=False, Dumper=yaml.SafeDumper, allow_unicode=True)
 
     logger = init_log('global', logging.INFO)
     logger.propagate = 0
