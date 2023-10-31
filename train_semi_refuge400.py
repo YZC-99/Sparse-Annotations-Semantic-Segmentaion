@@ -32,6 +32,7 @@ os.environ['MASTER_PORT'] = '28890'
 parser = argparse.ArgumentParser(description='Sparsely-annotated Semantic Segmentation')
 parser.add_argument('--config', type=str, default='configs/semi-drishti.yaml')
 parser.add_argument('--save-path', type=str, default='exp/semi-drishti')
+parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--local_rank', default=0, type=int)
 parser.add_argument('--port', default=None, type=int)
 
@@ -39,7 +40,7 @@ parser.add_argument('--port', default=None, type=int)
 
 def main():
     args = parser.parse_args()
-
+    seed_torch(args.seed)
     # cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
     cfg = yaml.load(open(args.config, "r"), Loader=yaml.Loader)
     yaml.dump(cfg, open(os.path.join(args.save_path,'config.yaml'), "w"), default_flow_style=False)
