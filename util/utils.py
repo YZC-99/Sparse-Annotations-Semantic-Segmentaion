@@ -299,7 +299,6 @@ def semi_evaluate(model, loader, mode, cfg):
 def semi_odoc_evaluate(model, loader, mode, cfg):
     model.eval()
     assert mode in ['original', 'center_crop', 'sliding_window']
-    metric = meanIOU(num_classes=cfg['nclass'])
     od_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
     oc_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
 
