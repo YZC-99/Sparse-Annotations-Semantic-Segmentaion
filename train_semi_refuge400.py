@@ -33,7 +33,15 @@ parser = argparse.ArgumentParser(description='Sparsely-annotated Semantic Segmen
 parser.add_argument('--config', type=str, default='configs/semi-drishti.yaml')
 parser.add_argument('--save-path', type=str, default='exp/semi-drishti')
 parser.add_argument('--seed', type=int, default=42)
+
+
 parser.add_argument('--info', type=str, default='default')
+
+parser.add_argument('--pseudo_from', type=str, default='teacher')
+parser.add_argument('--prototype_type', type=str, default='correct')
+
+
+
 parser.add_argument('--local_rank', default=0, type=int)
 parser.add_argument('--port', default=None, type=int)
 
@@ -45,6 +53,7 @@ def main():
     # cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
     cfg = yaml.load(open(args.config, "r"), Loader=yaml.Loader)
     cfg['info'] = args.info
+    cfg['pseudo_from'] = args.pseudo_from
     with open(os.path.join(args.save_path,'config.yaml'), 'w', encoding='utf-8') as yaml_file:
         yaml.dump(cfg, yaml_file, default_flow_style=False, Dumper=yaml.SafeDumper, allow_unicode=True)
 
@@ -95,8 +104,10 @@ def main():
     OC_IOUprevious_best = 0.0
 
     #==========初始化prototype=========
-    prototype_manager = PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
-#     prototype_manager = Correct_PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
+    if args.prototype_type == 'normal':
+        prototype_manager = PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
+    elif args.prototype_type == 'correct':
+        prototype_manager = Correct_PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
     #===================
 
     from torch.utils.tensorboard import SummaryWriter
@@ -160,21 +171,31 @@ def main():
                 pseudo_sup_loss = loss_calc(unlabeled_pred, unlabeled_mask_from_teacher,
                                      ignore_index=cfg['nclass'], multi=False,
                                      class_weight=use_weight, ohem=ohem)
-                prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
-                #             prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
+                if args.prototype_type == 'normal':
+                    prototypes = prototype_manager(labeled_feat.detach(), labeled_mask)
+                elif args.prototype_type == 'correct':
+                    prototypes = prototype_manager(labeled_feat.detach(),labeled_pred.detach(), labeled_mask)
 
                 threshold = 0.0
-                pseudo_mask_1 = unlabeled_mask_from_teacher
-                pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
-                                              mode='bilinear').squeeze().long()
-
-                # pseudo_mask_2 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
-                # pseudo_mask_2 = F.interpolate(pseudo_mask_2.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
-                #                               mode='bilinear').squeeze().long()
-                # 找到相同类别的位置
-                # intersection = (pseudo_mask_1 == pseudo_mask_2)
-                # # 将相交部分作为新的标签
-                # pseudo_mask_1 = pseudo_mask_1 * intersection
+                if args.pseudo_from == 'teacher':
+                    pseudo_mask_1 = unlabeled_mask_from_teacher
+                    pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                                  mode='bilinear').squeeze().long()
+                elif args.pseudo_from == 'prototype':
+                    pseudo_mask_1 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
+                    pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                                  mode='bilinear').squeeze().long()
+                elif args.pseudo_from == 'mix':
+                    pseudo_mask_1 = unlabeled_mask_from_teacher
+                    pseudo_mask_1 = F.interpolate(pseudo_mask_1.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                                  mode='bilinear').squeeze().long()
+                    pseudo_mask_2 = pseudo_from_prototype(prototypes, unlabeled_feat, threshold)
+                    pseudo_mask_2 = F.interpolate(pseudo_mask_2.unsqueeze(1).float(), size=unlabeled_pred.size()[-2:],
+                                                  mode='bilinear').squeeze().long()
+                    # 找到相同类别的位置
+                    intersection = (pseudo_mask_1 == pseudo_mask_2)
+                    # 将相交部分作为新的标签
+                    pseudo_mask_1 = pseudo_mask_1 * intersection
 
                 # Gaussian
                 cur_cls_label = build_cur_cls_label(pseudo_mask_1, cfg['nclass'])

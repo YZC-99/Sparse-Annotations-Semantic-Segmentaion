@@ -22,6 +22,9 @@ criterion:
 conf_thresh: 0.95
 weight: 0.5
 
+# arguments for semi
+pseudo_from: teacher
+prototype_type: normal
 
 # arguments for model
 aux: False
