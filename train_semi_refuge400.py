@@ -229,10 +229,10 @@ def main():
         # mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
         eval_outs = semi_odoc_evaluate(model, valloader, eval_mode)
         mIOU = eval_outs['mIOU']
-        OD_IOU = eval_outs['OD_IOU']
-        OC_IOU = eval_outs['OC_IOU']
-        writer.add_scalar('IOU/OD',OD_IOU * 100.0,epoch)
-        writer.add_scalar('IOU/OC',OC_IOU * 100.0,epoch)
+        OD_IOU = eval_outs['OD_IOU'] * 100.0
+        OC_IOU = eval_outs['OC_IOU'] * 100.0
+        writer.add_scalar('IOU/OD',OD_IOU,epoch)
+        writer.add_scalar('IOU/OC',OC_IOU,epoch)
         writer.add_scalar('IOU/mIOU',mIOU,epoch)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
