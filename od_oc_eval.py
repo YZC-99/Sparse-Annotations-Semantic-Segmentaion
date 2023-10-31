@@ -18,7 +18,7 @@ MODE = None
 
 
 def parse_args():
-    name = 'semi-REFUGE400'
+    name = 'semi-refuge400'
     mode = 'semi'
 
     parser = argparse.ArgumentParser(description='SASS Framework')

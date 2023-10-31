@@ -85,15 +85,20 @@ def main():
 
     iters = 0
     total_iters = len(trainloader) * cfg['epochs']
-    previous_best = 0.0
+    mIOUprevious_best = 0.0
+    OD_IOUprevious_best = 0.0
+    OC_IOUprevious_best = 0.0
 
     #==========初始化prototype=========
     prototype_manager = PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
 #     prototype_manager = Correct_PrototypeManager(cfg['nclass'],256,torch.float32,'cuda:0')
     #===================
+
+    from torch.utils.tensorboard import SummaryWriter
+    writer = SummaryWriter(log_dir = args.save_path)
     for epoch in range(cfg['epochs']):
-        logger.info('===========> Epoch: {:}, LR: {:.4f}, Previous best: {:.2f}'.format(
-            epoch, optimizer.param_groups[0]['lr'], previous_best))
+        logger.info('===========> Epoch: {:}, LR: {:.4f}, mIOU Previous best: {:.2f}'.format(
+            epoch, optimizer.param_groups[0]['lr'], mIOUprevious_best))
 
         model.train()
         loss_m = AverageMeter()
@@ -220,17 +225,34 @@ def main():
         else:
             eval_mode = 'original'
         # mIOU, iou_class = semi_evaluate(model, valloader, eval_mode, cfg)
-        mIOU, iou_class = semi_odoc_evaluate(model, valloader, eval_mode, cfg)
+        eval_outs = semi_odoc_evaluate(model, valloader, eval_mode)
+        mIOU = eval_outs['mIOU']
+        OD_IOU = eval_outs['OD_IOU']
+        OC_IOU = eval_outs['OC_IOU']
+        writer.add_scalar('IOU/OD',OD_IOU,i)
+        writer.add_scalar('IOU/OC',OC_IOU,i)
+        writer.add_scalar('IOU/mIOU',mIOU,i)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
 
-        if mIOU > previous_best:
-            if previous_best != 0:
-                os.remove(os.path.join(args.save_path, '%s_%.2f.pth' % (cfg['backbone'], previous_best)))
-            previous_best = mIOU
+        if mIOU > mIOUprevious_best:
+            if mIOUprevious_best != 0:
+                os.remove(os.path.join(args.save_path, 'mIOU_%s_%.2f.pth' % (cfg['backbone'], mIOUprevious_best)))
+            mIOUprevious_best = mIOU
             torch.save(model.state_dict(),
-                       os.path.join(args.save_path, '%s_%.2f.pth' % (cfg['backbone'], mIOU)))
-
+                       os.path.join(args.save_path, 'mIOU_%s_%.2f.pth' % (cfg['backbone'], mIOU)))
+        if OD_IOU > OD_IOUprevious_best:
+            if OD_IOUprevious_best != 0:
+                os.remove(os.path.join(args.save_path, 'OD_IOU_%s_%.2f.pth' % (cfg['backbone'], OD_IOUprevious_best)))
+            OD_IOUprevious_best = OD_IOU
+            torch.save(model.state_dict(),
+                       os.path.join(args.save_path, 'OD_IOU_%s_%.2f.pth' % (cfg['backbone'], OD_IOU)))
+        if OC_IOU > OC_IOUprevious_best:
+            if OC_IOUprevious_best != 0:
+                os.remove(os.path.join(args.save_path, 'OC_IOU_%s_%.2f.pth' % (cfg['backbone'], OC_IOUprevious_best)))
+            OC_IOUprevious_best = OC_IOU
+            torch.save(model.state_dict(),
+                       os.path.join(args.save_path, 'OC_IOU_%s_%.2f.pth' % (cfg['backbone'], OC_IOU)))
 
 if __name__ == '__main__':
     main()

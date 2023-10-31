@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from math import *
 from PIL import Image
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 from torchmetrics import JaccardIndex,Dice,Accuracy,Recall,F1Score
 import copy
 def check_dir(dir):
@@ -265,7 +266,7 @@ def evaluate(model, loader, mode, cfg):
 
     return mIOU, iou_class
 
-def semi_evaluate(model, loader, mode, cfg):
+def semi_evaluate(model, loader, mode, writer: SummaryWriter):
     model.eval()
     assert mode in ['original', 'center_crop', 'sliding_window']
     metric = meanIOU(num_classes=cfg['nclass'])
@@ -296,9 +297,10 @@ def semi_evaluate(model, loader, mode, cfg):
 
     return mIOU, iou_class
 
-def semi_odoc_evaluate(model, loader, mode, cfg):
+def semi_odoc_evaluate(model, loader, mode):
     model.eval()
     assert mode in ['original', 'center_crop', 'sliding_window']
+    background_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
     od_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
     oc_binary_jaccard = JaccardIndex(num_classes=2, task='binary', average='micro').to('cuda:0')
 
@@ -307,6 +309,15 @@ def semi_odoc_evaluate(model, loader, mode, cfg):
             img = img.cuda()
             mask = mask.cuda()
             pred = model(img).argmax(1)
+
+            background_preds = copy.deepcopy(pred)
+            background_y = copy.deepcopy(mask)
+            background_preds[background_preds == 0] = 3
+            background_y[background_y == 0] = 3
+            background_preds[background_preds != 3] = 0
+            background_y[background_y != 3] = 0
+            background_preds[background_preds == 3] = 1
+            background_y[background_y == 3] = 1
 
             od_preds = copy.deepcopy(pred)
             od_y = copy.deepcopy(mask)
@@ -326,17 +337,19 @@ def semi_odoc_evaluate(model, loader, mode, cfg):
             od_cover_preds = od_preds + oc_preds
             od_cover_preds[od_cover_preds > 0] = 1
 
-            od_binary_jaccard.update(od_cover_preds,od_cover_gt)
-            oc_binary_jaccard.update(oc_preds,oc_y)
+            od_binary_jaccard.update(od_cover_preds, od_cover_gt)
+            background_binary_jaccard.update(background_preds, background_y)
+            oc_binary_jaccard.update(oc_preds, oc_y)
 
-
-            # metric.add_batch(pred.cpu().numpy(), mask.numpy())
-
-    # iou_class, mIOU = metric.evaluate()
-    mIOU = (od_binary_jaccard.compute() + oc_binary_jaccard.compute()) / 2
+    background_iou = background_binary_jaccard.compute()
+    od_iou = od_binary_jaccard.compute()
+    oc_iou = oc_binary_jaccard.compute()
+    mIOU = (background_iou + od_iou + oc_iou) / 3
     mIOU = mIOU * 100.0
 
-    return mIOU, "iou_class"
+    return {'OD_IOU':od_iou,
+            'OC_IOU':oc_iou,
+            'mIOU':mIOU}
 
 if __name__ == '__main__':
     def bitget(byteval, idx):
