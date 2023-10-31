@@ -42,6 +42,7 @@ def main():
 
     # cfg = yaml.load(open(os.path.join('/root/autodl-tmp/Saprse-Annotations-Semantic-Segmentaion',args.config), "r"), Loader=yaml.Loader)
     cfg = yaml.load(open(args.config, "r"), Loader=yaml.Loader)
+    yaml.dump(cfg, open(os.path.join(args.save_path,'config.yaml'), "w"), default_flow_style=False)
 
     logger = init_log('global', logging.INFO)
     logger.propagate = 0
@@ -229,8 +230,8 @@ def main():
         mIOU = eval_outs['mIOU']
         OD_IOU = eval_outs['OD_IOU']
         OC_IOU = eval_outs['OC_IOU']
-        writer.add_scalar('IOU/OD',OD_IOU,epoch)
-        writer.add_scalar('IOU/OC',OC_IOU,epoch)
+        writer.add_scalar('IOU/OD',OD_IOU * 100.0,epoch)
+        writer.add_scalar('IOU/OC',OC_IOU * 100.0,epoch)
         writer.add_scalar('IOU/mIOU',mIOU,epoch)
 
         logger.info('***** Evaluation {} ***** >>>> meanIOU: {:.2f}\n'.format(eval_mode, mIOU))
