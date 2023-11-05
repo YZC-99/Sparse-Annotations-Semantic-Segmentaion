@@ -160,7 +160,7 @@ def GMM(feat, vecs, pred, true_mask, cls_label):
     feat = feat.view(b, 1, -1, h, w)
 
     """ 255 caused by cropping, using preserve mask """
-    abs = torch.abs(feat - vecs).mean(2) # 对应原论文公式(6)
+    abs = torch.abs(feat - vecs).mean(2) # 对应原论文公式(6)中d的计算
     abs = abs * cls_label.view(b, k, 1, 1) * preserve.view(b, 1, h, w)
     abs = abs.view(b, k, h*w)
 
@@ -174,13 +174,43 @@ def GMM(feat, vecs, pred, true_mask, cls_label):
     # std = std.view(b, k, 1, 1).detach()
 
     abs = abs.view(b, k, h, w)
-    res = torch.exp(-(abs * abs))
+    res = torch.exp(-(abs * abs)) # 公式(7)里面 -d^2
     # res = torch.exp(-(abs*abs)/(2*std*std + 1e-6))
     res = F.interpolate(res, size=(oh, ow), mode='bilinear')
     res = res * cls_label.view(b, k, 1, 1)
 
     return res
 
+def GMM_w_std(feat, vecs, pred):
+    # 传入的pred是一个经过clean_mask处理的
+    b, k, oh, ow = pred.size()
+
+    # 将pred的大小调整来与feat相同
+    pred = F.interpolate(pred, size=feat.size()[-2:], mode='bilinear')
+    _, _, h, w = pred.size()
+
+    # vecs原本的形状是(b,num_class,c),现在调整为(b,num_class,c,1,1)
+    vecs = vecs.view(b, k, -1, 1, 1)
+    # feat原来的形状是(b,c,h,w),现在调整为(b,1,c,h,w)
+    feat = feat.view(b, 1, -1, h, w)
+
+    """ 255 caused by cropping, using preserve mask """
+    abs = torch.abs(feat - vecs).mean(2) # 对应原论文公式(6)中d的计算
+    abs = abs.view(b, k, h*w)
+
+    # """ calculate std """
+    num = pred.view(b, k, -1).sum(-1)
+    std = ((pred.view(b, k, -1)*(abs ** 2)).sum(-1)/(num + 1e-6)) ** 0.5
+    std = std.view(b, k, 1, 1).detach()
+
+
+    abs = abs.view(b, k, h, w)
+    # res = torch.exp(-(abs * abs)) # 公式(7)里面 -d^2,精简版，忽略了标准差
+    res = torch.exp(-(abs*abs)/(2*std*std + 1e-6))
+    res = F.interpolate(res, size=(oh, ow), mode='bilinear')
+    res = res.view(b, k, 1, 1)
+
+    return res
 
 def loss_calc(preds, label, ignore_index, reduction='mean', multi=False, class_weight=False,
               ohem=False):

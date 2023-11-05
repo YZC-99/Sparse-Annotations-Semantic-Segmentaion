@@ -190,12 +190,34 @@ def main():
                 pred_cl = F.softmax(unlabeled_pred, dim=1)
 
                 # proto_loss：L_con
-                vecs, unlabled_proto_loss = cal_protypes(unlabeled_feat, pseudo_mask_1, cfg['nclass'])
-                _, labled_proto_loss = cal_protypes(labeled_feat, labeled_mask, cfg['nclass'])
-
+                _, unlabled_proto_loss = cal_protypes(unlabeled_feat, pseudo_mask_1, cfg['nclass'])
+                # μ = 标记图片的
+                vecs, labled_proto_loss = cal_protypes(labeled_feat, labeled_mask, cfg['nclass'])
+                """
+                总的思想：利用有标记的图片去引导未标记的图片，如何引导呢？按道理它们的同类别的特征理应相似。
+                因此，引入GMM，
+                1、这里将标记图片的分类层前面产生的特征均值作为当前类别的质心，从而计算混合高斯模型当前分量的均值μ
+                2、随后计算标准差，标准差里面很重要的一个参数d = f - μ (当前特征与质心的距离)
+                3、
+                """
                 # res应该是代表公式(6)的平方(b,num_class,h,w)
                 # res:(b,num_class,256,256)
-                res = GMM(unlabeled_feat, vecs, pred_cl, pseudo_mask_1, cur_cls_label)
+                res = GMM_w_std(unlabeled_feat, vecs, pred_cl)
+
+                mask_from_res = torch.argmax(res, dim=1, keepdim=True)
+                #                 print(mask_from_res.shape)
+                #                 grid = torchvision.utils.make_grid(mask_from_res)
+                #                 print(res.shape)
+                current_mask = mask_from_res[0, ...]
+                current_mask = current_mask * 125
+                current_mask = current_mask.repeat(1, 3, 1, 1).to(torch.uint8)
+
+                #                 print(current_mask.shape)
+                current_gt = (unlabeled_mask[0, ...] * 125).to(torch.uint8)
+                writer.add_image('gmm', current_mask, iters, dataformats='NCHW')
+                writer.add_image('gt', current_gt, iters, dataformats='HW')
+
+
                 gmm_loss = cal_gmm_loss(unlabeled_pred.softmax(1), res, cur_cls_label,
                                         pseudo_mask_1) + unlabled_proto_loss
 
